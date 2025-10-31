@@ -1,0 +1,5 @@
+{
+  "name": "90 Minutes News - Video Slideshow Creator",
+  "description": "An application to create a video slideshow from images with an audio track and automatically generated, word-by-word captions. The app features a premium video editor interface with a yellow and black theme.",
+  "requestFramePermissions": []
+}
