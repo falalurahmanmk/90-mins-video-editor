@@ -1,8 +1,7 @@
 
 // FIX: Replaced placeholder content with a full implementation of the VideoPreview component.
 // This component handles video preview playback with images and captions, and video downloading.
-import React, { useRef, useEffect, useState, forwardRef, useImperativeHandle, useLayoutEffect } from 'react';
-import type { Word } from '../types';
+import React, { useRef, useEffect, useState, forwardRef, useImperativeHandle } from 'react';
 import { Spinner } from './Spinner';
 
 export interface VideoPreviewRef {
@@ -12,38 +11,25 @@ export interface VideoPreviewRef {
 interface VideoPreviewProps {
   audioUrl: string;
   imageUrls: string[];
-  captions: Word[];
   audioDuration: number;
   watermarkUrl: string;
 }
 
 const FONT_FAMILY = "'Anton', sans-serif";
-const BASE_FONT_SIZE = 32; // pt
-const CAPTION_COLOR = '#FFFF00'; // Yellow
-const CAPTION_OUTLINE_COLOR = '#000000';
 const CANVAS_WIDTH = 1080; 
 const CANVAS_HEIGHT = 1920; // 9:16 aspect ratio, 1080p
-
-// Margins
-const MARGIN_X = 20;
-const MARGIN_Y_TOP = 40;
-const MARGIN_Y_BOTTOM = 20;
+const IMAGE_DURATION_SECONDS = 3;
 
 export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(
-  ({ audioUrl, imageUrls, captions, audioDuration, watermarkUrl }, ref) => {
+  ({ audioUrl, imageUrls, audioDuration, watermarkUrl }, ref) => {
     const audioRef = useRef<HTMLAudioElement>(null);
     const animationFrameId = useRef<number>(0);
     const loadedImages = useRef<HTMLImageElement[]>([]);
     const watermarkImage = useRef<HTMLImageElement | null>(null);
     
-    const captionContainerRef = useRef<HTMLDivElement>(null);
-    const captionTextRef = useRef<HTMLSpanElement>(null);
-
     const [isPlaying, setIsPlaying] = useState(false);
     const [progress, setProgress] = useState(0);
     const [imagesLoaded, setImagesLoaded] = useState(false);
-    const [currentWord, setCurrentWord] = useState('');
-    const [captionScale, setCaptionScale] = useState(1);
     
     // Load images
     useEffect(() => {
@@ -82,9 +68,9 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(
     }, [imageUrls, watermarkUrl]);
 
     const getCurrentImageIndex = (time: number) => {
-        if (audioDuration === 0 || loadedImages.current.length === 0) return 0;
-        const durationPerImage = audioDuration / loadedImages.current.length;
-        return Math.min(loadedImages.current.length - 1, Math.floor(time / durationPerImage));
+        if (loadedImages.current.length === 0) return 0;
+        const imageIndex = Math.floor(time / IMAGE_DURATION_SECONDS);
+        return imageIndex % loadedImages.current.length;
     };
 
     const drawCanvasFrame = (ctx: CanvasRenderingContext2D, time: number) => {
@@ -119,7 +105,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(
       if (watermarkImage.current) {
           const wm = watermarkImage.current;
           const padding = 40;
-          const topOffset = 120;
+          const topOffset = 50; // User request: 50px from top
           const maxHeight = 100;
           const scale = maxHeight / wm.height;
           const wmHeight = maxHeight;
@@ -127,36 +113,6 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(
           ctx.globalAlpha = 0.8;
           ctx.drawImage(wm, canvas.width - wmWidth - padding, topOffset, wmWidth, wmHeight);
           ctx.globalAlpha = 1.0;
-      }
-      
-      const activeWord = captions.find(c => time >= c.start && time < c.end);
-      if(activeWord){
-        const maxWidth = canvas.width - (MARGIN_X * 2);
-  
-        // Set initial font to measure text
-        ctx.font = `bold ${BASE_FONT_SIZE}pt ${FONT_FAMILY}`;
-        const textWidth = ctx.measureText(activeWord.word).width;
-
-        // Calculate the final font size, scaling down if the word is too long
-        let finalFontSize = BASE_FONT_SIZE;
-        if (textWidth > maxWidth) {
-            finalFontSize = BASE_FONT_SIZE * (maxWidth / textWidth);
-        }
-
-        // Apply final font settings and draw
-        ctx.font = `bold ${finalFontSize}pt ${FONT_FAMILY}`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillStyle = CAPTION_COLOR;
-        ctx.strokeStyle = CAPTION_OUTLINE_COLOR;
-        ctx.lineWidth = 4;
-        ctx.lineJoin = 'round';
-        
-        const textX = canvas.width / 2;
-        const textY = canvas.height / 2;
-        
-        ctx.strokeText(activeWord.word, textX, textY);
-        ctx.fillText(activeWord.word, textX, textY);
       }
     };
 
@@ -170,10 +126,6 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(
       const animate = () => {
         if (!audioRef.current) return;
         const currentTime = audioRef.current.currentTime;
-        
-        const activeWord = captions.find(c => currentTime >= c.start && currentTime < c.end);
-        setCurrentWord(activeWord ? activeWord.word : '');
-        
         setProgress((currentTime / audioDuration) * 100);
         animationFrameId.current = requestAnimationFrame(animate);
       };
@@ -183,23 +135,8 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(
       return () => {
         cancelAnimationFrame(animationFrameId.current);
       };
-    }, [isPlaying, audioDuration, captions, imagesLoaded]);
+    }, [isPlaying, audioDuration, imagesLoaded]);
     
-    useLayoutEffect(() => {
-        if(captionContainerRef.current && captionTextRef.current) {
-            const containerWidth = captionContainerRef.current.offsetWidth - (MARGIN_X * 2);
-            const containerHeight = captionContainerRef.current.offsetHeight - MARGIN_Y_TOP - MARGIN_Y_BOTTOM;
-            const textWidth = captionTextRef.current.offsetWidth;
-            const textHeight = captionTextRef.current.offsetHeight;
-            
-            const scaleX = textWidth > containerWidth ? containerWidth / textWidth : 1;
-            const scaleY = textHeight > containerHeight ? containerHeight / textHeight : 1;
-            
-            setCaptionScale(Math.min(scaleX, scaleY));
-        }
-    }, [currentWord]);
-
-
     const togglePlay = () => {
       const audio = audioRef.current;
       if (!audio) return;
@@ -210,7 +147,6 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(
         if(audio.currentTime >= audioDuration - 0.1) {
             audio.currentTime = 0;
             setProgress(0);
-            setCurrentWord('');
         }
         audio.play();
       }
@@ -220,7 +156,6 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(
     const handleAudioEnded = () => {
         setIsPlaying(false);
         setProgress(100);
-        setCurrentWord('');
     }
     
     const handleProgressClick = (e: React.MouseEvent<HTMLDivElement, MouseEvent>) => {
@@ -235,8 +170,6 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(
         
         audio.currentTime = newTime;
         setProgress(percentage * 100);
-        const activeWord = captions.find(c => newTime >= c.start && newTime < c.end);
-        setCurrentWord(activeWord ? activeWord.word : '');
     }
 
     useImperativeHandle(ref, () => ({
@@ -257,24 +190,39 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(
         const audioSourceNode = audioContext.createMediaElementSource(offlineAudio);
         const audioDestinationNode = audioContext.createMediaStreamDestination();
         audioSourceNode.connect(audioDestinationNode);
-        // The line that played audio to the main output has been removed to ensure silent export.
         
+        // FIX: Also connect to a muted gain node connected to the destination.
+        // This is a workaround for browsers where the audio pipeline is not processed
+        // unless it's connected to the output, ensuring audio is captured in the recording.
+        const gainNode = audioContext.createGain();
+        gainNode.gain.setValueAtTime(0, audioContext.currentTime);
+        audioSourceNode.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+
         const combinedStream = new MediaStream([
             ...videoStream.getVideoTracks(),
             ...audioDestinationNode.stream.getAudioTracks(),
         ]);
+        
+        // FIX: Explicitly request the AAC audio codec for maximum compatibility in MP4 containers.
+        const mimeType = 'video/mp4; codecs=mp4a.40.2';
+        if (!MediaRecorder.isTypeSupported(mimeType)) {
+          console.warn("MP4 with AAC audio is not supported. Falling back to default.");
+        }
 
-        const recorder = new MediaRecorder(combinedStream, { mimeType: 'video/webm; codecs=vp8,opus' }); // Switched to vp8 for speed
+        const recorder = new MediaRecorder(combinedStream, { 
+            mimeType: MediaRecorder.isTypeSupported(mimeType) ? mimeType : 'video/mp4' 
+        });
         const chunks: Blob[] = [];
         recorder.ondataavailable = e => chunks.push(e.data);
         
         const downloadPromise = new Promise<void>((resolve, reject) => {
             recorder.onstop = () => {
-                const blob = new Blob(chunks, { type: 'video/webm' });
+                const blob = new Blob(chunks, { type: 'video/mp4' });
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = 'video-slideshow.webm';
+                a.download = 'video-slideshow.mp4';
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
@@ -295,7 +243,6 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(
             offlineAudio.load();
         });
         
-        offlineAudio.muted = true; // Mute the element to be safe
         offlineAudio.play();
         
         let renderLoopId: number;
@@ -335,32 +282,10 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(
                     />
                 </div>
                  {/* Watermark */}
-                 <div className="absolute top-16 right-5 opacity-80 h-[50px]">
+                 <div className="absolute top-[50px] right-10 opacity-80 h-[50px]">
                     <img src={watermarkUrl} alt="Watermark" className="h-full w-auto" />
                  </div>
-                 {/* Captions */}
-                <div 
-                    ref={captionContainerRef}
-                    className="absolute inset-0 flex items-center justify-center pointer-events-none p-5"
-                >
-                    <div 
-                        className={`transition-all duration-100 ${currentWord ? 'opacity-100 scale-100' : 'opacity-0 scale-125'}`}
-                        style={{ transform: `scale(${captionScale})`}}
-                    >
-                         <span 
-                            ref={captionTextRef}
-                            className="font-anton text-yellow-400 text-center leading-none"
-                            style={{
-                                fontSize: `${BASE_FONT_SIZE}pt`,
-                                WebkitTextStroke: '2px black',
-                                paintOrder: 'stroke fill',
-                            }}
-                         >
-                            {currentWord}
-                         </span>
-                    </div>
-                </div>
-
+                
                 {/* Controls */}
                 <div className="absolute inset-0" onClick={togglePlay}>
                     {!isPlaying && (
