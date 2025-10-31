@@ -1,3 +1,4 @@
+
 // FIX: Replaced placeholder content with a full implementation of the VideoPreview component.
 // This component handles video preview playback with images and captions, and video downloading.
 import React, { useRef, useEffect, useState, forwardRef, useImperativeHandle, useLayoutEffect } from 'react';
@@ -17,16 +18,16 @@ interface VideoPreviewProps {
 }
 
 const FONT_FAMILY = "'Anton', sans-serif";
-const BASE_FONT_SIZE = 100;
+const BASE_FONT_SIZE = 32; // pt
 const CAPTION_COLOR = '#FFFF00'; // Yellow
 const CAPTION_OUTLINE_COLOR = '#000000';
-const CANVAS_WIDTH = 540; 
-const CANVAS_HEIGHT = 960; // 9:16 aspect ratio
+const CANVAS_WIDTH = 1080; 
+const CANVAS_HEIGHT = 1920; // 9:16 aspect ratio, 1080p
 
 // Margins
-const MARGIN_X = 10;
-const MARGIN_Y_TOP = 20;
-const MARGIN_Y_BOTTOM = 10;
+const MARGIN_X = 20;
+const MARGIN_Y_TOP = 40;
+const MARGIN_Y_BOTTOM = 20;
 
 export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(
   ({ audioUrl, imageUrls, captions, audioDuration, watermarkUrl }, ref) => {
@@ -100,25 +101,26 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(
         const imageAspect = image.width / image.height;
         let dx, dy, dWidth, dHeight;
 
-        if (imageAspect > canvasAspect) {
+        // object-cover logic: Make image cover the entire canvas, cropping if necessary
+        if (imageAspect > canvasAspect) { // Image is wider than canvas, fit to height and crop sides
+            dHeight = canvas.height;
+            dWidth = dHeight * imageAspect;
+            dx = (canvas.width - dWidth) / 2;
+            dy = 0;
+        } else { // Image is taller or same aspect, fit to width and crop top/bottom
             dWidth = canvas.width;
             dHeight = dWidth / imageAspect;
             dx = 0;
             dy = (canvas.height - dHeight) / 2;
-        } else {
-            dHeight = canvas.height;
-            dWidth = dHeight * imageAspect;
-            dy = 0;
-            dx = (canvas.width - dWidth) / 2;
         }
         ctx.drawImage(image, dx, dy, dWidth, dHeight);
       }
 
       if (watermarkImage.current) {
           const wm = watermarkImage.current;
-          const padding = 20;
-          const topOffset = 60;
-          const maxHeight = 50;
+          const padding = 40;
+          const topOffset = 120;
+          const maxHeight = 100;
           const scale = maxHeight / wm.height;
           const wmHeight = maxHeight;
           const wmWidth = wm.width * scale;
@@ -129,17 +131,25 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(
       
       const activeWord = captions.find(c => time >= c.start && time < c.end);
       if(activeWord){
-        const maxTextWidth = canvas.width - (MARGIN_X * 2);
-        const maxTextHeight = canvas.height - MARGIN_Y_TOP - MARGIN_Y_BOTTOM;
-        
-        const fontSize = getOptimalFontSize(ctx, activeWord.word, FONT_FAMILY, maxTextWidth, maxTextHeight);
+        const maxWidth = canvas.width - (MARGIN_X * 2);
+  
+        // Set initial font to measure text
+        ctx.font = `bold ${BASE_FONT_SIZE}pt ${FONT_FAMILY}`;
+        const textWidth = ctx.measureText(activeWord.word).width;
 
-        ctx.font = `bold ${fontSize}px ${FONT_FAMILY}`;
+        // Calculate the final font size, scaling down if the word is too long
+        let finalFontSize = BASE_FONT_SIZE;
+        if (textWidth > maxWidth) {
+            finalFontSize = BASE_FONT_SIZE * (maxWidth / textWidth);
+        }
+
+        // Apply final font settings and draw
+        ctx.font = `bold ${finalFontSize}pt ${FONT_FAMILY}`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillStyle = CAPTION_COLOR;
         ctx.strokeStyle = CAPTION_OUTLINE_COLOR;
-        ctx.lineWidth = 8;
+        ctx.lineWidth = 4;
         ctx.lineJoin = 'round';
         
         const textX = canvas.width / 2;
@@ -149,22 +159,6 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(
         ctx.fillText(activeWord.word, textX, textY);
       }
     };
-    
-    const getOptimalFontSize = (ctx: CanvasRenderingContext2D, text: string, font: string, maxWidth: number, maxHeight: number) => {
-        let fontSize = BASE_FONT_SIZE;
-        do {
-            ctx.font = `bold ${fontSize}px ${font}`;
-            const metrics = ctx.measureText(text);
-            const textWidth = metrics.width;
-            const textHeight = metrics.actualBoundingBoxAscent + metrics.actualBoundingBoxDescent;
-            if (textWidth <= maxWidth && textHeight <= maxHeight) {
-                return fontSize;
-            }
-            fontSize -= 2;
-        } while (fontSize > 10);
-        return fontSize;
-    };
-
 
     // Animation loop for preview
     useEffect(() => {
@@ -256,21 +250,21 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(
         const offlineAudio = new Audio();
         offlineAudio.src = audioUrl;
         
-        const frameRate = 30;
+        const frameRate = 20; // Lowered for faster export
         const videoStream = offscreenCanvas.captureStream(frameRate);
         
         const audioContext = new AudioContext();
         const audioSourceNode = audioContext.createMediaElementSource(offlineAudio);
         const audioDestinationNode = audioContext.createMediaStreamDestination();
         audioSourceNode.connect(audioDestinationNode);
-        audioSourceNode.connect(audioContext.destination); // Play audio to sync
+        // The line that played audio to the main output has been removed to ensure silent export.
         
         const combinedStream = new MediaStream([
             ...videoStream.getVideoTracks(),
             ...audioDestinationNode.stream.getAudioTracks(),
         ]);
 
-        const recorder = new MediaRecorder(combinedStream, { mimeType: 'video/webm; codecs=vp9,opus' });
+        const recorder = new MediaRecorder(combinedStream, { mimeType: 'video/webm; codecs=vp8,opus' }); // Switched to vp8 for speed
         const chunks: Blob[] = [];
         recorder.ondataavailable = e => chunks.push(e.data);
         
@@ -301,6 +295,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(
             offlineAudio.load();
         });
         
+        offlineAudio.muted = true; // Mute the element to be safe
         offlineAudio.play();
         
         let renderLoopId: number;
@@ -333,10 +328,10 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(
             <div className="aspect-[9/16] relative">
                 <audio ref={audioRef} src={audioUrl} onEnded={handleAudioEnded} hidden />
                  {/* Image Display */}
-                 <div className="absolute inset-0">
+                <div className="absolute inset-0 bg-black flex items-center justify-center">
                     <img 
                       src={imageUrls[getCurrentImageIndex(progress / 100 * audioDuration)] || imageUrls[0]} 
-                      className="w-full h-full object-contain" 
+                      className="w-full h-full object-cover" 
                     />
                 </div>
                  {/* Watermark */}
@@ -346,7 +341,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(
                  {/* Captions */}
                 <div 
                     ref={captionContainerRef}
-                    className="absolute inset-0 flex items-center justify-center pointer-events-none"
+                    className="absolute inset-0 flex items-center justify-center pointer-events-none p-5"
                 >
                     <div 
                         className={`transition-all duration-100 ${currentWord ? 'opacity-100 scale-100' : 'opacity-0 scale-125'}`}
@@ -356,8 +351,8 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(
                             ref={captionTextRef}
                             className="font-anton text-yellow-400 text-center leading-none"
                             style={{
-                                fontSize: `${BASE_FONT_SIZE}px`,
-                                WebkitTextStroke: '4px black',
+                                fontSize: `${BASE_FONT_SIZE}pt`,
+                                WebkitTextStroke: '2px black',
                                 paintOrder: 'stroke fill',
                             }}
                          >
