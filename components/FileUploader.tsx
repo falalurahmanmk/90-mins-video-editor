@@ -1,13 +1,15 @@
+
 import React, { useRef } from 'react';
+import { LogoOption } from '../assets/defaultWatermark';
 
 interface FileUploaderProps {
   onAudioUpload: (file: File) => void;
   onImagesUpload: (files: File[]) => void;
-  onWatermarkUpload: (file: File) => void;
   audioFile: File | null;
   imageFiles: File[];
-  watermarkFile: File | null;
-  watermarkPreviewUrl: string;
+  logos: LogoOption[];
+  selectedWatermarkUrl: string;
+  onWatermarkSelect: (url: string) => void;
 }
 
 const UploadIcon = () => (
@@ -17,10 +19,9 @@ const UploadIcon = () => (
 );
 
 
-export const FileUploader: React.FC<FileUploaderProps> = ({ onAudioUpload, onImagesUpload, onWatermarkUpload, audioFile, imageFiles, watermarkFile, watermarkPreviewUrl }) => {
+export const FileUploader: React.FC<FileUploaderProps> = ({ onAudioUpload, onImagesUpload, audioFile, imageFiles, logos, selectedWatermarkUrl, onWatermarkSelect }) => {
   const audioInputRef = useRef<HTMLInputElement>(null);
   const imagesInputRef = useRef<HTMLInputElement>(null);
-  const watermarkInputRef = useRef<HTMLInputElement>(null);
 
   const handleAudioChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files && event.target.files[0]) {
@@ -31,12 +32,6 @@ export const FileUploader: React.FC<FileUploaderProps> = ({ onAudioUpload, onIma
   const handleImagesChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files) {
       onImagesUpload(Array.from(event.target.files));
-    }
-  };
-  
-  const handleWatermarkChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (event.target.files && event.target.files[0]) {
-        onWatermarkUpload(event.target.files[0]);
     }
   };
 
@@ -80,30 +75,24 @@ export const FileUploader: React.FC<FileUploaderProps> = ({ onAudioUpload, onIma
         </div>
       </div>
       
-       {/* Watermark Uploader */}
+       {/* Watermark Section */}
       <div className="md:col-span-2 mt-4">
-        <h3 className="font-anton text-2xl text-yellow-400 mb-2">3. UPLOAD WATERMARK <span className="text-gray-400 text-lg">(OPTIONAL)</span></h3>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-            <div 
-              className="sm:col-span-2 bg-gray-900 border-2 border-dashed border-gray-600 rounded-lg p-6 text-center cursor-pointer hover:border-yellow-400 transition-colors h-full flex flex-col justify-center"
-              onClick={() => watermarkInputRef.current?.click()}
-            >
-              <input type="file" accept="image/png" ref={watermarkInputRef} onChange={handleWatermarkChange} className="hidden" />
-              <div className="flex flex-col items-center">
-                <UploadIcon />
-                {watermarkFile ? (
-                   <p className="mt-2 text-green-400 truncate">{watermarkFile.name}</p>
-                ) : (
-                    <p className="mt-2 text-gray-400">Click to select a .PNG file</p>
-                )}
-              </div>
-            </div>
-            <div className="text-center">
-                <h4 className="font-semibold text-lg text-gray-300 mb-2">Watermark Preview:</h4>
-                <div className="aspect-video bg-gray-700 rounded-lg flex items-center justify-center p-2">
-                    <img src={watermarkPreviewUrl} alt="Watermark preview" className="max-w-full max-h-full object-contain"/>
+        <h3 className="font-anton text-2xl text-yellow-400 mb-2">3. CHOOSE YOUR WATERMARK</h3>
+        <div className="flex justify-center items-center gap-6 flex-wrap">
+           {logos.map((logo) => (
+             <div
+                key={logo.id}
+                className={`text-center w-full max-w-xs cursor-pointer rounded-lg p-2 transition-all ${
+                  selectedWatermarkUrl === logo.url ? 'ring-4 ring-yellow-400' : 'ring-2 ring-gray-700 hover:ring-yellow-500'
+                }`}
+                onClick={() => onWatermarkSelect(logo.url)}
+              >
+                <div className="aspect-video bg-gray-700 rounded-lg flex items-center justify-center p-2 pointer-events-none">
+                  <img src={logo.url} alt={`${logo.name} preview`} className="max-w-full max-h-full object-contain"/>
                 </div>
-            </div>
+                <p className="text-sm text-gray-400 mt-2">{logo.name}</p>
+              </div>
+           ))}
         </div>
       </div>
 

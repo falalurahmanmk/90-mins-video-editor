@@ -4,17 +4,17 @@ import { FileUploader } from './components/FileUploader';
 import { VideoPreview, VideoPreviewRef } from './components/VideoPreview';
 import { Spinner } from './components/Spinner';
 import { Logo } from './components/Logo';
-import { defaultWatermarkUrl } from './assets/defaultWatermark';
+import { logoOptions, LogoOption } from './assets/defaultWatermark';
 
 const App: React.FC = () => {
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [imageFiles, setImageFiles] = useState<File[]>([]);
-  const [watermarkFile, setWatermarkFile] = useState<File | null>(null);
   const [isDownloading, setIsDownloading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [imageUrls, setImageUrls] = useState<string[]>([]);
-  const [watermarkUrl, setWatermarkUrl] = useState<string>(defaultWatermarkUrl);
+  const [logos] = useState<LogoOption[]>(logoOptions);
+  const [selectedWatermarkUrl, setSelectedWatermarkUrl] = useState<string>(logos[0].url);
   const [audioDuration, setAudioDuration] = useState<number>(0);
   const [videoReady, setVideoReady] = useState(false);
 
@@ -39,16 +39,6 @@ const App: React.FC = () => {
       return () => urls.forEach(url => URL.revokeObjectURL(url));
     }
   }, [imageFiles]);
-  
-  useEffect(() => {
-    if (watermarkFile) {
-        const url = URL.createObjectURL(watermarkFile);
-        setWatermarkUrl(url);
-        return () => URL.revokeObjectURL(url);
-    } else {
-        setWatermarkUrl(defaultWatermarkUrl);
-    }
-  }, [watermarkFile]);
 
   const handleCreateSlideshowClick = () => {
     if (!audioFile || imageFiles.length === 0) {
@@ -78,10 +68,8 @@ const App: React.FC = () => {
   const handleReset = () => {
     setAudioFile(null);
     setImageFiles([]);
-    setWatermarkFile(null);
     setAudioUrl(null);
     setImageUrls([]);
-    setWatermarkUrl(defaultWatermarkUrl);
     setAudioDuration(0);
     setVideoReady(false);
     setError(null);
@@ -119,11 +107,11 @@ const App: React.FC = () => {
             <FileUploader
                 onAudioUpload={setAudioFile}
                 onImagesUpload={setImageFiles}
-                onWatermarkUpload={setWatermarkFile}
                 audioFile={audioFile}
                 imageFiles={imageFiles}
-                watermarkFile={watermarkFile}
-                watermarkPreviewUrl={watermarkUrl}
+                logos={logos}
+                selectedWatermarkUrl={selectedWatermarkUrl}
+                onWatermarkSelect={setSelectedWatermarkUrl}
             />
             <div className="mt-6 text-center">
                 <button
@@ -146,7 +134,7 @@ const App: React.FC = () => {
                     audioUrl={audioUrl}
                     imageUrls={imageUrls}
                     audioDuration={audioDuration}
-                    watermarkUrl={watermarkUrl}
+                    watermarkUrl={selectedWatermarkUrl}
                 />
                 )}
             </div>
